@@ -28,4 +28,8 @@ def check_eligibility(
         raise InspectionError('file_binding', f'File {artifact.file_id} does not belong to this generation and attempt')
     if artifact.sha256 != export.sha256:
         raise InspectionError('file_digest', f'Bytes differ from the generated file {artifact.file_id}')
+    # The origin is judged from where the file was actually generated, even when
+    # the bytes are byte-identical to the correct sector's recording.
+    if (export.shift_id, export.sector_id) != (order.shift_id, order.sector_id):
+        return Eligibility.WRONG_SECTOR, export
     return Eligibility.ELIGIBLE, export

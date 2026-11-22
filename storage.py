@@ -22,8 +22,7 @@ CREATE TABLE IF NOT EXISTS collection_orders (
 CREATE TABLE IF NOT EXISTS terminal_overlays (
     opened INTEGER PRIMARY KEY AUTOINCREMENT,
     order_id TEXT NOT NULL UNIQUE REFERENCES collection_orders(order_id),
-    previous_shift_id TEXT NOT NULL REFERENCES shift_rosters(shift_id),
-    previous_sector_id TEXT NOT NULL
+    operator_revision INTEGER NOT NULL
 );
 CREATE TABLE IF NOT EXISTS collection_attempts (
     attempt_id INTEGER PRIMARY KEY,
@@ -44,6 +43,8 @@ CREATE TABLE IF NOT EXISTS generated_exports (
     file_id TEXT PRIMARY KEY,
     generation_id TEXT NOT NULL UNIQUE,
     attempt_id INTEGER NOT NULL UNIQUE REFERENCES export_queue(attempt_id),
+    shift_id TEXT NOT NULL REFERENCES shift_rosters(shift_id),
+    sector_id TEXT NOT NULL,
     sha256 TEXT NOT NULL,
     original BLOB NOT NULL
 );

@@ -28,7 +28,7 @@ class GenerationLedger:
         require_identifier(file_id, 'file number')
         row = self.db.execute('''
             SELECT generated.file_id, generated.generation_id, generated.attempt_id,
-                   request.order_id, request.shift_id, request.sector_id, generated.sha256
+                   request.order_id, generated.shift_id, generated.sector_id, generated.sha256
             FROM generated_exports AS generated JOIN export_queue AS request USING (attempt_id)
             WHERE generated.file_id = ?
         ''', (file_id,)).fetchone()
@@ -44,7 +44,7 @@ class GenerationLedger:
     def existing_generation(self, attempt_id: int, generation_id: str, file_id: str) -> GeneratedExport | None:
         row = self.db.execute('''
             SELECT generated.file_id, generated.generation_id, generated.attempt_id,
-                   request.order_id, request.shift_id, request.sector_id, generated.sha256
+                   request.order_id, generated.shift_id, generated.sector_id, generated.sha256
             FROM generated_exports AS generated JOIN export_queue AS request USING (attempt_id)
             WHERE generated.attempt_id = ? OR generated.generation_id = ? OR generated.file_id = ?
         ''', (attempt_id, generation_id, file_id)).fetchone()
@@ -58,9 +58,10 @@ class GenerationLedger:
     def record(self, export: GeneratedExport, original: bytes) -> None:
         self.db.execute('''
             INSERT INTO generated_exports
-                (file_id, generation_id, attempt_id, sha256, original)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (export.file_id, export.generation_id, export.attempt_id, export.sha256, original))
+                (file_id, generation_id, attempt_id, shift_id, sector_id, sha256, original)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (export.file_id, export.generation_id, export.attempt_id,
+              export.shift_id, export.sector_id, export.sha256, original))
 
 
 def generate(
@@ -81,10 +82,12 @@ def generate(
         selected = OverlayState(db).effective_sector()
         if selected is None:
             raise InspectionError('no_selection', 'The terminal has no effective sector')
+        # The origin of an export is the range actually in effect when the device
+        # produces the file, not the range the order was opened for.
         shift_id, sector_id = selected
         original = source.read_source(shift_id, sector_id)
         export = GeneratedExport(file_id, generation_id, attempt_id, request.order_id,
-                                 request.shift_id, request.sector_id,
+                                 shift_id, sector_id,
                                  hashlib.sha256(original).hexdigest())
         ledger.record(export, original)
         return export

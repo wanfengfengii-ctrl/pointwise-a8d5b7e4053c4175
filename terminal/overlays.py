@@ -28,36 +28,37 @@ class OverlayState:
             current = load_selection(self.db)
             if current is None:
                 raise InspectionError('no_selection', 'Choose an operator sector before opening an overlay')
+            # Re-opening an overlay (e.g. a wrong-sector retry) only refreshes that
+            # order's temporary claim; every other order keeps its place in the stack.
             self.db.execute('DELETE FROM terminal_overlays WHERE order_id = ?', (order_id,))
             cursor = self.db.execute('''
-                INSERT INTO terminal_overlays (order_id, previous_shift_id, previous_sector_id)
-                VALUES (?, ?, ?)
-            ''', (order_id, current.shift_id, current.sector_id))
-            self.db.execute('''
-                UPDATE operator_selection SET shift_id = ?, sector_id = ? WHERE singleton = 1
-            ''', tuple(target))
+                INSERT INTO terminal_overlays (order_id, operator_revision) VALUES (?, ?)
+            ''', (order_id, current.revision))
             return Overlay(order_id, current.revision, cursor.lastrowid)
 
     def effective_sector(self) -> tuple[str, str] | None:
         current = load_selection(self.db)
-        return None if current is None else (current.shift_id, current.sector_id)
+        if current is None:
+            return None
+        active = self.db.execute('''
+            SELECT orders.shift_id AS shift_id, orders.sector_id AS sector_id
+            FROM terminal_overlays AS overlays
+            JOIN collection_orders AS orders USING (order_id)
+            WHERE overlays.operator_revision >= ?
+            ORDER BY overlays.opened DESC
+            LIMIT 1
+        ''', (current.revision,)).fetchone()
+        if active is None:
+            # No live temporary claim: the last manual operator choice remains on display.
+            return current.shift_id, current.sector_id
+        return active['shift_id'], active['sector_id']
 
 
 def finish(db: sqlite3.Connection, order_id: str) -> tuple[str, str] | None:
     require_identifier(order_id, 'order number')
     with write_transaction(db):
         state = OverlayState(db)
-        current = state.effective_sector()
-        restore = db.execute('''
-            SELECT orders.shift_id, orders.sector_id, overlays.previous_shift_id, overlays.previous_sector_id
-            FROM terminal_overlays AS overlays JOIN collection_orders AS orders USING (order_id)
-            WHERE overlays.order_id = ?
-        ''', (order_id,)).fetchone()
-        if restore is None:
-            return current
+        # Taking an order down releases only that order's overlay; an unknown order
+        # matches no row, so the effective filter is preserved.
         db.execute('DELETE FROM terminal_overlays WHERE order_id = ?', (order_id,))
-        if current == (restore['shift_id'], restore['sector_id']):
-            db.execute('''
-                UPDATE operator_selection SET shift_id = ?, sector_id = ? WHERE singleton = 1
-            ''', (restore['previous_shift_id'], restore['previous_sector_id']))
         return state.effective_sector()
