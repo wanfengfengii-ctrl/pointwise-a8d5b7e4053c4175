@@ -1,0 +1,28 @@
+{
+  "rosters": [
+    ["desk", [["east", [["E1", "Pa"]]]]],
+    ["day", [["north", [["N1", "kPa"], ["N2", "Pa"]]], ["west", [["W1", "Pa"]]]]]
+  ],
+  "initial": ["desk", "east"],
+  "sources": [
+    ["desk", "east", "point,value\nE1,3\n"],
+    ["day", "north", "point,value\nN1,0.007\nN2,NA\n"],
+    ["day", "west", "point,value\nW1,11\n"]
+  ],
+  "events": [
+    [1, "start", ["A", "day", "north"]],
+    [2, "select", ["day", "north"]],
+    [3, "start", ["B", "day", "west"]],
+    [4, "generate", ["A", "g-a-west", "file-a-west"]],
+    [5, "generate", ["B", "g-b-west", "file-b-west"]],
+    [6, "finish", ["B"]],
+    [7, "receive", ["g-b-west"]],
+    [8, "receive", ["g-a-west"]],
+    [9, "publish", ["B"]],
+    [10, "resume", ["A"]],
+    [11, "generate", ["A", "g-a-north", "file-a-north"]],
+    [12, "receive", ["g-a-north"]],
+    [13, "publish", ["A"]],
+    [14, "finish", ["A"]]
+  ]
+}
